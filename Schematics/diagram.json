@@ -3,45 +3,107 @@
   "author": "CNS3104 team",
   "editor": "wokwi",
   "parts": [
-    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
-    { "type": "board-bme280", "id": "bme", "top": -160, "left": 250, "attrs": {} },
-    { "type": "board-ds3231", "id": "rtc", "top": -160, "left": 420, "attrs": {} },
-    { "type": "wokwi-ds18b20", "id": "temp1", "top": -20, "left": 250, "attrs": { "temperature": "24" } },
-    { "type": "wokwi-resistor", "id": "r3", "top": 30, "left": 340, "rotate": 90, "attrs": { "value": "4700" } },
-    { "type": "wokwi-potentiometer", "id": "soil", "top": 90, "left": 250, "attrs": {} },
-    { "type": "wokwi-potentiometer", "id": "bat", "top": 90, "left": 420, "attrs": {} },
-    { "type": "wokwi-pushbutton", "id": "rain", "top": 250, "left": 250, "attrs": { "color": "blue" } }
+    {
+      "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "board-bmp180",
+      "id": "bmp",
+      "top": -190,
+      "left": 260,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-ds1307",
+      "id": "rtc",
+      "top": -187.8,
+      "left": 422.5,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht",
+      "top": -268.5,
+      "left": 666.6,
+      "attrs": { "temperature": "26", "humidity": "55" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r4",
+      "top": -63.8,
+      "left": 584.75,
+      "attrs": { "value": "4700" }
+    },
+    {
+      "type": "wokwi-ds18b20",
+      "id": "temp1",
+      "top": -40,
+      "left": 260,
+      "attrs": { "temperature": "24" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r3",
+      "top": -25.4,
+      "left": 373.55,
+      "rotate": 270,
+      "attrs": { "value": "4700" }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "soil",
+      "top": 100,
+      "left": 260,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "bat",
+      "top": 100,
+      "left": 440,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "rain",
+      "top": 260,
+      "left": 260,
+      "attrs": { "color": "blue" }
+    }
   ],
   "connections": [
-    [ "esp:TX", "$serialMonitor:RX", "", [] ],
-    [ "esp:RX", "$serialMonitor:TX", "", [] ],
-
-    [ "esp:3V3", "bme:VCC", "red", [] ],
-    [ "esp:GND.1", "bme:GND", "black", [] ],
-    [ "esp:21", "bme:SDA", "blue", [] ],
-    [ "esp:22", "bme:SCL", "purple", [] ],
-
-    [ "esp:3V3", "rtc:VCC", "red", [] ],
-    [ "esp:GND.1", "rtc:GND", "black", [] ],
-    [ "esp:21", "rtc:SDA", "blue", [] ],
-    [ "esp:22", "rtc:SCL", "purple", [] ],
-
-    [ "esp:3V3", "temp1:VCC", "red", [] ],
-    [ "esp:GND.1", "temp1:GND", "black", [] ],
-    [ "esp:4", "temp1:DQ", "green", [] ],
-    [ "esp:3V3", "r3:1", "red", [] ],
-    [ "r3:2", "temp1:DQ", "green", [] ],
-
-    [ "esp:3V3", "soil:VCC", "red", [] ],
-    [ "esp:GND.1", "soil:GND", "black", [] ],
-    [ "esp:34", "soil:SIG", "orange", [] ],
-
-    [ "esp:3V3", "bat:VCC", "red", [] ],
-    [ "esp:GND.1", "bat:GND", "black", [] ],
-    [ "esp:35", "bat:SIG", "yellow", [] ],
-
-    [ "esp:27", "rain:1.l", "cyan", [] ],
-    [ "esp:GND.1", "rain:2.l", "black", [] ]
+    ["esp:TX", "$serialMonitor:RX", "", []],
+    ["esp:RX", "$serialMonitor:TX", "", []],
+    ["esp:3V3", "bmp:VCC", "red", []],
+    ["esp:GND.1", "bmp:GND", "black", []],
+    ["esp:21", "bmp:SDA", "blue", []],
+    ["esp:22", "bmp:SCL", "purple", []],
+    ["esp:5V", "rtc:5V", "red", []],
+    ["esp:GND.1", "rtc:GND", "black", []],
+    ["esp:21", "rtc:SDA", "blue", []],
+    ["esp:22", "rtc:SCL", "purple", []],
+    ["esp:3V3", "dht:VCC", "red", []],
+    ["esp:GND.1", "dht:GND", "black", []],
+    ["esp:25", "dht:SDA", "gray", []],
+    ["esp:3V3", "r4:1", "red", []],
+    ["r4:2", "dht:SDA", "gray", []],
+    ["esp:3V3", "temp1:VCC", "red", []],
+    ["esp:GND.1", "temp1:GND", "black", []],
+    ["esp:4", "temp1:DQ", "green", []],
+    ["esp:3V3", "r3:1", "red", []],
+    ["r3:2", "temp1:DQ", "green", []],
+    ["esp:3V3", "soil:VCC", "red", []],
+    ["esp:GND.1", "soil:GND", "black", []],
+    ["esp:34", "soil:SIG", "orange", []],
+    ["esp:3V3", "bat:VCC", "red", []],
+    ["esp:GND.1", "bat:GND", "black", []],
+    ["esp:35", "bat:SIG", "yellow", []],
+    ["esp:27", "rain:1.l", "cyan", []],
+    ["esp:GND.1", "rain:2.l", "black", []]
   ],
   "dependencies": {}
 }
