@@ -1,65 +1,75 @@
-#include <Wire.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <Adafruit_BMP085.h>
-#include <RTClib.h>
 #include <DHT.h>
 
-// Pins (v2 schematic: no DS18B20, no rain gauge)
+#define SIMULATOR 0            // 1 = Wokwi, 0 = real board
+
+// Pins
 #define DHT_PIN   25
 #define SOIL_PIN  34
 #define BAT_PIN   35
 
-// Calibration
-#define SOIL_DRY_RAW  3200    // ADC reading with the sensor in dry air
-#define SOIL_WET_RAW  1400    // ADC reading in water
-#define VBAT_DIVIDER  2.0     // two equal resistors: battery = 2 x pin voltage
+// Soil calibration: measure YOUR sensor (dry air, then in water)
+#define SOIL_DRY_RAW  3200
+#define SOIL_WET_RAW  1400
 
-// WiFi (Wokwi simulated network; change on the real board)
+// Potentiometer simulates a Li-ion battery: 0-3.3 V on the pin maps to this range
+#define BAT_MIN_V  3.0
+#define BAT_MAX_V  4.2
+
+#if SIMULATOR
 const char* WIFI_SSID = "Wokwi-GUEST";
 const char* WIFI_PASS = "";
+#else
+const char* WIFI_SSID = "YOUR_2.4GHZ_WIFI";    // <-- change
+const char* WIFI_PASS = "YOUR_PASSWORD";       // <-- change
+#endif
 
-// Supabase (use the ANON key only, never the service_role key)
+// Supabase (publishable key only)
 const char* SUPA_URL = "https://wubufrivwsmjgqjnavew.supabase.co/rest/v1/readings";
 const char* SUPA_KEY = "sb_publishable_DUf8fAVckXvGMFwl7d5VeA_7pFBVNNn";
 
-const unsigned long SEND_MS = 15000;   // 15 s for demos; use 60000 or more on the real device
+const unsigned long SEND_MS = 60000;   // 60 s; use 15000 for demos
 
-Adafruit_BMP085 bmp;
-RTC_DS1307 rtc;                // change to RTC_DS3231 on the real board
 DHT dht(DHT_PIN, DHT22);
-
-bool bmpOk = false, rtcOk = false;
 unsigned long lastSend = 0;
 
-void scanI2C() {
-  Serial.println("--- I2C scan (SDA=21, SCL=22) ---");
-  int found = 0;
-  for (byte addr = 1; addr < 127; addr++) {
-    Wire.beginTransmission(addr);
-    if (Wire.endTransmission() == 0) {
-      Serial.printf("Device at 0x%02X\n", addr);  // expect 0x68 (RTC), 0x77 (BMP180)
-      found++;
-    }
-  }
-  if (!found) Serial.println("No I2C devices found");
-}
-
-void connectWiFi() {
+bool connectWiFi() {
   Serial.print("Connecting to WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASS, 6);   // channel 6 speeds up connection in Wokwi
-  while (WiFi.status() != WL_CONNECTED) {
+  WiFi.disconnect(true);       // drop any half-finished attempt
+  delay(200);
+  WiFi.mode(WIFI_STA);
+#if SIMULATOR
+  WiFi.begin(WIFI_SSID, WIFI_PASS, 6);   // channel 6 only for Wokwi
+#else
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+#endif
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) {
     delay(250);
     Serial.print(".");
   }
-  Serial.println(" connected");
+  bool ok = WiFi.status() == WL_CONNECTED;
+  Serial.println(ok ? " connected" : " FAILED (will retry)");
+  if (!ok) Serial.printf("WiFi status code: %d\n", WiFi.status());  // 1 = SSID not found, 6 = wrong password
+  return ok;
 }
 
 // NaN is invalid JSON, so send null instead
 void fmtFloat(char* out, size_t n, float v) {
   if (isnan(v)) strncpy(out, "null", n);
   else snprintf(out, n, "%.1f", v);
+}
+
+// Average several ADC samples to reduce noise
+int readAvg(int pin, int samples = 10) {
+  long sum = 0;
+  for (int i = 0; i < samples; i++) {
+    sum += analogRead(pin);
+    delay(5);
+  }
+  return sum / samples;
 }
 
 bool postReading(const char* payload) {
@@ -80,70 +90,49 @@ bool postReading(const char* payload) {
 
 void setup() {
   Serial.begin(115200);
-  Wire.begin(21, 22);
-  scanI2C();
-
-  bmpOk = bmp.begin();
-  rtcOk = rtc.begin();
-  if (rtcOk && !rtc.isrunning()) rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-
   dht.begin();
   analogReadResolution(12);
-
-  Serial.printf("BMP180: %s | RTC: %s\n", bmpOk ? "OK" : "FAIL", rtcOk ? "OK" : "FAIL");
-
   connectWiFi();
 }
 
 void loop() {
-  if (millis() - lastSend < SEND_MS && lastSend != 0) return;
+  if (lastSend != 0 && millis() - lastSend < SEND_MS) return;
   lastSend = millis();
-  if (WiFi.status() != WL_CONNECTED) connectWiFi();
+
+  if (WiFi.status() != WL_CONNECTED && !connectWiFi()) return;
 
   Serial.println("\n===== Reading =====");
 
-  char ts[24] = "n/a";
-  if (rtcOk) {
-    DateTime t = rtc.now();
-    snprintf(ts, sizeof(ts), "%04d-%02d-%02d %02d:%02d:%02d",
-             t.year(), t.month(), t.day(), t.hour(), t.minute(), t.second());
-    Serial.printf("Time: %s\n", ts);
+  // DHT22: up to 3 tries, since single reads sometimes fail
+  float h = NAN, tc = NAN;
+  for (int i = 0; i < 3 && (isnan(h) || isnan(tc)); i++) {
+    h = dht.readHumidity();
+    tc = dht.readTemperature();
+    if (isnan(h) || isnan(tc)) delay(2000);
   }
-
-  float bmpT = NAN, bmpP = NAN;
-  if (bmpOk) {
-    bmpT = bmp.readTemperature();
-    bmpP = bmp.readPressure() / 100.0;
-    Serial.printf("BMP180: %.1f C, %.1f hPa\n", bmpT, bmpP);
-  }
-
-  float h = dht.readHumidity(), tc = dht.readTemperature();
   if (isnan(h) || isnan(tc)) Serial.println("DHT22: read FAILED");
   else Serial.printf("DHT22: %.1f C, %.1f %%RH\n", tc, h);
 
-  // Soil moisture: high ADC value = dry, low = wet
-  int soilRaw = analogRead(SOIL_PIN);
+  // Soil moisture: high ADC = dry, low = wet
+  int soilRaw = readAvg(SOIL_PIN);
   int soilPct = constrain(map(soilRaw, SOIL_DRY_RAW, SOIL_WET_RAW, 0, 100), 0, 100);
   Serial.printf("Soil: raw %d (%d %% moisture)\n", soilRaw, soilPct);
 
-  // Battery: pin sees half the battery voltage
-  int batRaw = analogRead(BAT_PIN);
-  float vbat = batRaw * 3.3 / 4095.0 * VBAT_DIVIDER;
+  // Battery (simulated by potentiometer)
+  int batRaw = readAvg(BAT_PIN);
+  float vpin = batRaw * 3.3 / 4095.0;
+  float vbat = BAT_MIN_V + (vpin / 3.3) * (BAT_MAX_V - BAT_MIN_V);
   Serial.printf("Battery: raw %d (%.2f V)\n", batRaw, vbat);
 
-  // Build JSON (keys match the Supabase column names) and send
-  char sBmpT[12], sBmpP[12], sTc[12], sH[12];
-  fmtFloat(sBmpT, sizeof(sBmpT), bmpT);
-  fmtFloat(sBmpP, sizeof(sBmpP), bmpP);
-  fmtFloat(sTc,   sizeof(sTc),   tc);
-  fmtFloat(sH,    sizeof(sH),    h);
+  char sTc[12], sH[12];
+  fmtFloat(sTc, sizeof(sTc), tc);
+  fmtFloat(sH,  sizeof(sH),  h);
 
-  char payload[400];
+  char payload[200];
   snprintf(payload, sizeof(payload),
-    "{\"device_time\":\"%s\",\"bmp_temp\":%s,\"pressure_hpa\":%s,"
-    "\"air_temp\":%s,\"humidity\":%s,"
+    "{\"air_temp\":%s,\"humidity\":%s,"
     "\"soil_raw\":%d,\"soil_pct\":%d,\"battery_v\":%.2f}",
-    ts, sBmpT, sBmpP, sTc, sH, soilRaw, soilPct, vbat);
+    sTc, sH, soilRaw, soilPct, vbat);
 
   bool ok = postReading(payload);
   Serial.printf("[%s] %s\n", ok ? "SENT" : "FAIL", payload);
