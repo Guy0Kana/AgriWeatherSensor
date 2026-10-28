@@ -21,8 +21,8 @@ const char* WIFI_SSID = "Wokwi-GUEST";
 const char* WIFI_PASS = "";
 
 // Supabase (use the ANON key only, never the service_role key)
-const char* SUPA_URL = "https://YOUR-PROJECT.supabase.co/rest/v1/readings";
-const char* SUPA_KEY = "YOUR-ANON-KEY";
+const char* SUPA_URL = "https://wubufrivwsmjgqjnavew.supabase.co/rest/v1/readings";
+const char* SUPA_KEY = "sb_publishable_DUf8fAVckXvGMFwl7d5VeA_7pFBVNNn";
 
 const unsigned long SEND_MS = 15000;   // 15 s for demos; use 60000 or more on the real device
 
