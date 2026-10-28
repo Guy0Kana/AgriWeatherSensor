@@ -2,20 +2,20 @@
 #include <Adafruit_BMP085.h>
 #include <RTClib.h>
 #include <DHT.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
 
+// Pins (v2 schematic: no DS18B20, no rain gauge)
 #define DHT_PIN   25
-#define ONEWIRE   4
 #define SOIL_PIN  34
 #define BAT_PIN   35
-#define RAIN_PIN  27
+
+// Calibration
+#define SOIL_DRY_RAW  3200    // ADC reading with the sensor in dry air
+#define SOIL_WET_RAW  1400    // ADC reading in water
+#define VBAT_DIVIDER  2.0     // two equal resistors: battery = 2 x pin voltage
 
 Adafruit_BMP085 bmp;
-RTC_DS1307 rtc;
+RTC_DS1307 rtc;                // change to RTC_DS3231 on the real board
 DHT dht(DHT_PIN, DHT22);
-OneWire oneWire(ONEWIRE);
-DallasTemperature ds18(&oneWire);
 
 bool bmpOk = false, rtcOk = false;
 
@@ -42,8 +42,6 @@ void setup() {
   if (rtcOk && !rtc.isrunning()) rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
   dht.begin();
-  ds18.begin();
-  pinMode(RAIN_PIN, INPUT_PULLUP);   // button pressed = LOW = "rain"
   analogReadResolution(12);
 
   Serial.printf("BMP180: %s | RTC: %s\n", bmpOk ? "OK" : "FAIL", rtcOk ? "OK" : "FAIL");
@@ -67,18 +65,15 @@ void loop() {
   if (isnan(h) || isnan(tc)) Serial.println("DHT22: read FAILED");
   else Serial.printf("DHT22: %.1f C, %.1f %%RH\n", tc, h);
 
-  ds18.requestTemperatures();
-  float dt = ds18.getTempCByIndex(0);
-  if (dt == DEVICE_DISCONNECTED_C) Serial.println("DS18B20: not found");
-  else Serial.printf("DS18B20: %.2f C\n", dt);
-
+  // Soil moisture: high ADC value = dry, low = wet
   int soilRaw = analogRead(SOIL_PIN);
-  Serial.printf("Soil: raw %d (%d %%)\n", soilRaw, map(soilRaw, 0, 4095, 0, 100));
+  int soilPct = constrain(map(soilRaw, SOIL_DRY_RAW, SOIL_WET_RAW, 0, 100), 0, 100);
+  Serial.printf("Soil: raw %d (%d %% moisture)\n", soilRaw, soilPct);
 
+  // Battery: pin sees half the battery voltage
   int batRaw = analogRead(BAT_PIN);
-  Serial.printf("Battery: raw %d (%.2f V)\n", batRaw, batRaw * 3.3 / 4095.0);
-
-  Serial.printf("Rain: %s\n", digitalRead(RAIN_PIN) == LOW ? "YES (button pressed)" : "no");
+  float vbat = batRaw * 3.3 / 4095.0 * VBAT_DIVIDER;
+  Serial.printf("Battery: raw %d (%.2f V)\n", batRaw, vbat);
 
   delay(2000);
 }
