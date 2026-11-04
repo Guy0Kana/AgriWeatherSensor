@@ -3,20 +3,15 @@
 #include <WiFiClientSecure.h>
 #include <DHT.h>
 
-#define SIMULATOR 0            // 1 = Wokwi, 0 = real board
+#define SIMULATOR 1            // 1 = Wokwi, 0 = real board
 
 // Pins
 #define DHT_PIN   25
 #define SOIL_PIN  34
-#define BAT_PIN   35
 
 // Soil calibration: measure YOUR sensor (dry air, then in water)
 #define SOIL_DRY_RAW  3200
 #define SOIL_WET_RAW  1400
-
-// Potentiometer simulates a Li-ion battery: 0-3.3 V on the pin maps to this range
-#define BAT_MIN_V  3.0
-#define BAT_MAX_V  4.2
 
 #if SIMULATOR
 const char* WIFI_SSID = "Wokwi-GUEST";
@@ -118,21 +113,15 @@ void loop() {
   int soilPct = constrain(map(soilRaw, SOIL_DRY_RAW, SOIL_WET_RAW, 0, 100), 0, 100);
   Serial.printf("Soil: raw %d (%d %% moisture)\n", soilRaw, soilPct);
 
-  // Battery (simulated by potentiometer)
-  int batRaw = readAvg(BAT_PIN);
-  float vpin = batRaw * 3.3 / 4095.0;
-  float vbat = BAT_MIN_V + (vpin / 3.3) * (BAT_MAX_V - BAT_MIN_V);
-  Serial.printf("Battery: raw %d (%.2f V)\n", batRaw, vbat);
-
   char sTc[12], sH[12];
   fmtFloat(sTc, sizeof(sTc), tc);
   fmtFloat(sH,  sizeof(sH),  h);
 
-  char payload[200];
+  char payload[160];
   snprintf(payload, sizeof(payload),
     "{\"air_temp\":%s,\"humidity\":%s,"
-    "\"soil_raw\":%d,\"soil_pct\":%d,\"battery_v\":%.2f}",
-    sTc, sH, soilRaw, soilPct, vbat);
+    "\"soil_raw\":%d,\"soil_pct\":%d}",
+    sTc, sH, soilRaw, soilPct);
 
   bool ok = postReading(payload);
   Serial.printf("[%s] %s\n", ok ? "SENT" : "FAIL", payload);
