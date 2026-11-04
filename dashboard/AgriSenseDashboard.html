@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Busia AgriSense — Live Farm Dashboard</title>
+
+<!-- Charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+  :root{
+    --bg:#0a1120; --panel:#111c2f; --panel2:#16233a; --line:#22314e;
+    --text:#e8eefb; --muted:#8ba0c0;
+    --green:#35d69f; --amber:#f6b73c; --red:#f0616a;
+    --blue:#4aa8ff; --purple:#a78bfa; --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:radial-gradient(1200px 600px at 10% -10%, #12213a 0%, var(--bg) 55%);
+    color:var(--text); min-height:100vh; padding:16px 18px 40px;
+  }
+  a{color:var(--blue)}
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex; flex-wrap:wrap; gap:14px; align-items:center;
+    justify-content:space-between; margin-bottom:18px;
+  }
+  .brand{display:flex; align-items:center; gap:12px}
+  .logo{
+    width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+    background:linear-gradient(135deg,#35d69f,#1d8f6a); font-size:22px;
+    box-shadow:0 6px 20px rgba(53,214,159,.25);
+  }
+  .brand h1{font-size:18px;letter-spacing:.3px}
+  .brand p{font-size:12px;color:var(--muted);margin-top:2px}
+
+  .header-right{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .badge{
+    display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
+    padding:7px 13px;border-radius:999px;border:1px solid var(--line);
+    background:var(--panel); color:var(--muted);
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .badge.live{color:var(--green);border-color:rgba(53,214,159,.4)}
+  .badge.live .dot{background:var(--green);box-shadow:0 0 0 0 rgba(53,214,159,.6);animation:pulse 2s infinite}
+  .badge.down{color:var(--red);border-color:rgba(240,97,106,.4)}
+  .badge.down .dot{background:var(--red)}
+  @keyframes pulse{70%{box-shadow:0 0 0 9px rgba(53,214,159,0)}100%{box-shadow:0 0 0 0 rgba(53,214,159,0)}}
+
+  button{
+    font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
+    padding:8px 14px;border-radius:10px;border:1px solid var(--line);
+    background:var(--panel);color:var(--text);transition:.15s;
+  }
+  button:hover{background:var(--panel2);border-color:#33456a}
+  button.primary{background:linear-gradient(135deg,#35d69f,#1f9e75);color:#04140e;border:none}
+  button.primary:hover{filter:brightness(1.08)}
+
+  /* ---------- Node chips ---------- */
+  .chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+  .chip{
+    display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;
+    background:var(--panel);border:1px solid var(--line);font-size:12.5px;
+    color:var(--muted);cursor:pointer;transition:.15s;
+  }
+  .chip:hover{border-color:#33456a}
+  .chip.active{background:rgba(53,214,159,.12);border-color:var(--green);color:var(--green)}
+  .chip .sdot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .chip.stale .sdot{background:var(--amber)}
+  .chip.offline .sdot{background:var(--red)}
+
+  /* ---------- Layout ---------- */
+  .grid{display:grid;gap:14px}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .main{grid-template-columns:340px 1fr;margin-top:14px}
+  .bottom{grid-template-columns:1fr 380px;margin-top:14px}
+  @media(max-width:1050px){.main,.bottom{grid-template-columns:1fr}}
+
+  .card{
+    background:linear-gradient(180deg,var(--panel) 0%,#0f1a2c 100%);
+    border:1px solid var(--line);border-radius:var(--radius);padding:16px;
+  }
+  .card h3{
+    font-size:12px;text-transform:uppercase;letter-spacing:1.1px;
+    color:var(--muted);font-weight:600;margin-bottom:12px;
+  }
+
+  /* ---------- KPI cards ---------- */
+  .kpi{position:relative;overflow:hidden}
+  .kpi .label{font-size:11.5px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);font-weight:600}
+  .kpi .value{font-size:30px;font-weight:700;margin:8px 0 2px;letter-spacing:-.5px}
+  .kpi .unit{font-size:14px;color:var(--muted);font-weight:500;margin-left:3px}
+  .kpi .sub{font-size:11.5px;color:var(--muted)}
+  .kpi .bar{height:4px;border-radius:3px;background:#1c2a44;margin-top:11px;overflow:hidden}
+  .kpi .bar span{display:block;height:100%;border-radius:3px;transition:width .5s ease}
+  .kpi .icon{position:absolute;top:14px;right:15px;font-size:19px;opacity:.55}
+
+  .ok{color:var(--green)} .warn{color:var(--amber)} .bad{color:var(--red)} .info{color:var(--blue)}
+
+  /* ---------- Gauge ---------- */
+  .gauge-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+  .gauge{position:relative;width:190px;height:190px}
+  .gauge svg{transform:rotate(-90deg)}
+  .gauge .center{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+  }
+  .gauge .center .big{font-size:38px;font-weight:700;letter-spacing:-1px}
+  .gauge .center .small{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  .gauge-legend{display:flex;gap:16px;font-size:11.5px;color:var(--muted);margin-top:6px}
+
+  /* ---------- Advisory ---------- */
+  .adv-list{display:flex;flex-direction:column;gap:9px;max-height:330px;overflow-y:auto;padding-right:4px}
+  .adv-list::-webkit-scrollbar{width:6px}
+  .adv-list::-webkit-scrollbar-thumb{background:#25375a;border-radius:3px}
+  .adv{
+    display:flex;gap:11px;padding:11px 13px;border-radius:11px;
+    border-left:3px solid var(--blue);background:rgba(74,168,255,.07);font-size:12.5px;
+  }
+  .adv.critical{border-color:var(--red);background:rgba(240,97,106,.09)}
+  .adv.warning{border-color:var(--amber);background:rgba(246,183,60,.09)}
+  .adv.good{border-color:var(--green);background:rgba(53,214,159,.07)}
+  .adv .em{font-size:15px;line-height:1.2}
+  .adv strong{display:block;margin-bottom:2px;font-size:12.5px}
+  .adv span{color:var(--muted);font-size:11.5px;line-height:1.45}
+  .adv .ts{display:block;margin-top:5px;font-size:10.5px;color:#5f739a}
+  .adv .ts{color:#5f739a}
+
+  /* ---------- Charts ---------- */
+  .chart-box{position:relative;height:290px}
+  .chart-box.small{height:220px}
+
+  /* ---------- Log table ---------- */
+  .table-wrap{max-height:330px;overflow:auto;border-radius:10px;border:1px solid var(--line)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead th{
+    position:sticky;top:0;background:#14213a;color:var(--muted);
+    text-align:left;padding:9px 11px;font-weight:600;font-size:11px;
+    text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line);
+  }
+  tbody td{padding:8px 11px;border-bottom:1px solid #16233a;color:#c9d7ec;white-space:nowrap}
+  tbody tr:hover{background:rgba(74,168,255,.05)}
+  .empty{padding:36px;text-align:center;color:var(--muted);font-size:13px}
+
+  td.mono{font-family:ui-monospace,Consolas,monospace;color:#8ba0c0}
+  .nul{color:#5f739a;font-style:italic}
+  td.ok{color:var(--green)} td.warn{color:var(--amber)} td.bad{color:var(--red)}
+
+  /* ---------- Latest row (mirrors the readings table) ---------- */
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:12px}
+  .kv dt{font-family:ui-monospace,Consolas,monospace;color:var(--muted)}
+  .kv dd{text-align:right;color:#c9d7ec;font-variant-numeric:tabular-nums;word-break:break-all}
+  .kv dd.null{color:#5f739a;font-style:italic}
+
+  footer{margin-top:22px;text-align:center;font-size:11.5px;color:#4e6285;line-height:1.7}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">🌱</div>
+    <div>
+      <h1>Busia AgriSense — Live Farm Dashboard</h1>
+      <p>CNS 3201 · Group 4B · Strathmore University</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="badge" id="connBadge"><span class="dot"></span><span id="connText">Connecting…</span></span>
+    <span class="badge" id="lastBadge">🗄 <span id="lastText">No readings yet</span></span>
+    <button class="primary" id="csvBtn">⬇ Export CSV</button>
+  </div>
+</header>
+
+<div class="chip-row" id="chipRow">
+  <span class="chip" style="cursor:default;color:#4e6285">Waiting for nodes…</span>
+</div>
+
+<!-- ================= KPI ROW ================= -->
+<div class="grid kpis" id="kpiRow">
+  <div class="card kpi">
+    <div class="icon">💧</div>
+    <div class="label">Soil Moisture</div>
+    <div class="value" id="kSoil">--<span class="unit">%</span></div>
+    <div class="sub">column: soil_pct</div>
+    <div class="bar"><span id="bSoil" style="width:0%;background:var(--blue)"></span></div>
+  </div>
+  <div class="card kpi">
+    <div class="icon">📟</div>
+    <div class="label">Soil Raw</div>
+    <div class="value" id="kRaw">--<span class="unit">raw</span></div>
+    <div class="sub">column: soil_raw</div>
+    <div class="bar"><span id="bRaw" style="width:0%;background:var(--amber)"></span></div>
+  </div>
+  <div class="card kpi">
+    <div class="icon">☀️</div>
+    <div class="label">Air Temperature</div>
+    <div class="value" id="kAirT">--<span class="unit">°C</span></div>
+    <div class="sub">column: air_temp</div>
+    <div class="bar"><span id="bAirT" style="width:0%;background:var(--red)"></span></div>
+  </div>
+  <div class="card kpi">
+    <div class="icon">🌫️</div>
+    <div class="label">Relative Humidity</div>
+    <div class="value" id="kHum">--<span class="unit">%</span></div>
+    <div class="sub">column: humidity</div>
+    <div class="bar"><span id="bHum" style="width:0%;background:var(--purple)"></span></div>
+  </div>
+</div>
+
+<!-- ================= GAUGE + TREND ================= -->
+<div class="grid main">
+  <div class="card">
+    <h3>Soil Moisture Gauge</h3>
+    <div class="gauge-wrap">
+      <div class="gauge">
+        <svg width="190" height="190" viewBox="0 0 190 190">
+          <circle cx="95" cy="95" r="78" fill="none" stroke="#1c2a44" stroke-width="15"/>
+          <circle id="gaugeArc" cx="95" cy="95" r="78" fill="none" stroke="#4aa8ff"
+                  stroke-width="15" stroke-linecap="round"
+                  stroke-dasharray="490" stroke-dashoffset="490"
+                  style="transition:stroke-dashoffset .7s ease, stroke .4s"/>
+        </svg>
+        <div class="center">
+          <div class="big" id="gaugeVal">--</div>
+          <div class="small">% VWC</div>
+        </div>
+      </div>
+      <div class="gauge-legend">
+        <span>🔴 &lt;25 critical</span><span>🟡 25–35 low</span><span>🟢 35–70 ideal</span><span>🔵 &gt;85 flooded</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Soil &amp; Climate Trend — <span id="chartNode" style="color:var(--green)">no node</span></h3>
+    <div class="chart-box"><canvas id="trendChart"></canvas></div>
+  </div>
+</div>
+
+<!-- ================= ADVISORY + LOG ================= -->
+<div class="grid bottom">
+  <div class="card">
+    <h3>Live Readings — table: readings</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>id</th><th>device_id</th><th>recorded_at</th><th>device_time</th>
+            <th>air_temp °C</th><th>humidity %</th><th>soil_raw</th><th>soil_pct %</th>
+          </tr>
+        </thead>
+        <tbody id="logBody">
+          <tr><td colspan="8" class="empty">Loading readings from Supabase…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div class="card">
+      <h3>Latest Row — <span id="latestDevice" style="color:var(--green)">readings</span></h3>
+      <dl class="kv" id="latestRow">
+        <dt>id</dt><dd class="null">null</dd>
+        <dt>device_id</dt><dd class="null">null</dd>
+        <dt>recorded_at</dt><dd class="null">null</dd>
+        <dt>device_time</dt><dd class="null">null</dd>
+        <dt>air_temp</dt><dd class="null">null</dd>
+        <dt>humidity</dt><dd class="null">null</dd>
+        <dt>soil_raw</dt><dd class="null">null</dd>
+        <dt>soil_pct</dt><dd class="null">null</dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h3>Agronomic Advisories</h3>
+      <div class="adv-list" id="advList">
+        <div class="adv"><div class="em">ℹ️</div><div>
+          <strong>Awaiting data</strong>
+          <span>Advisories are generated automatically from incoming sensor readings.</span>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Busia AgriSense · Supabase (PostgreSQL) · Data foundation for the AI advisory system<br/>
+  Group 4B — Strathmore University, School of Computing &amp; Engineering Sciences
+</footer>
+
+<script>
+/* ============================================================================
+   1. CONFIGURATION
+   ========================================================================= */
+const CONFIG = {
+  // --- Supabase ------------------------------------------------------------
+  supabaseUrl: 'https://wubufrivwsmjgqjnavew.supabase.co',
+  // Publishable (anon) key — meant for browser code. NEVER put the secret /
+  // service_role key in this file.
+  supabaseKey: 'sb_publishable_DUf8fAVckXvGMFwl7d5VeA_7pFBVNNn',
+  table: 'readings',
+
+  pollMs: 5000,          // how often to ask Supabase for new rows
+  initialRows: 200,      // history loaded when the page opens
+  rawMax: 4095,          // full-scale value of soil_raw (12-bit ADC) — only used for the bar
+
+  maxPoints: 60,         // points kept per device in the chart
+  maxLogRows: 400,       // rows kept in the live log
+  staleAfterMs: 5 * 60 * 1000,   // 5 min without data → stale
+  offlineAfterMs: 15 * 60 * 1000 // 15 min → offline
+};
+
+/* Agronomic thresholds — tune with your local agronomist / Busia soil data */
+const TH = {
+  soil:  { critLow: 25, low: 35, high: 70, critHigh: 85 },
+  airT:  { low: 10, high: 33, critHigh: 38 },
+  hum:   { low: 35, high: 85 }
+};
+
+/* ============================================================================
+   TIME + TEXT HELPERS
+   Supabase stores timestamptz values in UTC. Everything is displayed in
+   Nairobi time (EAT, UTC+3, no DST) so it matches the clock on your PC.
+   ========================================================================= */
+const TZ = 'Africa/Nairobi';
+
+// ms since epoch → "14:21:03"
+function fmtTime(ms, withSeconds = true) {
+  const o = { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false };
+  if (withSeconds) o.second = '2-digit';
+  return new Date(ms).toLocaleTimeString('en-GB', o);
+}
+
+// ms since epoch → "04 Nov 2026, 14:21:03"
+function fmtDateTime(ms) {
+  return new Date(ms).toLocaleString('en-GB', {
+    timeZone: TZ, day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  });
+}
+
+// ms since epoch → "2026-11-04T14:21:03+03:00"
+function fmtISOLocal(ms) {
+  return new Date(ms).toLocaleString('sv-SE', { timeZone: TZ }).replace(' ', 'T') + '+03:00';
+}
+
+// ms since epoch → "2026-11-04"
+function fmtDateLocal(ms) {
+  return new Date(ms).toLocaleDateString('sv-SE', { timeZone: TZ });
+}
+
+// Database text is untrusted — escape it before putting it in HTML
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function num(v) { return (v === undefined || v === null || isNaN(v)) ? null : Number(v); }
+function fix(v, d) { const n = num(v); return n === null ? '--' : n.toFixed(d); }
+
+/* ============================================================================
+   2. STATE  (everything here comes from the Supabase `readings` table)
+   ========================================================================= */
+const state = {
+  nodes: {},          // device_id -> { history[], last, count }
+  activeNode: null,
+  log: [],            // flat array of rows (newest first)
+  advisories: [],
+  lastId: 0,          // highest row id seen so far
+  loaded: false       // true once the first fetch succeeded
+};
+
+/* ============================================================================
+   3. SUPABASE CONNECTION (REST polling)
+   readings: id, device_id, recorded_at, device_time, air_temp, humidity,
+             soil_raw, soil_pct
+   ========================================================================= */
+const connBadge = document.getElementById('connBadge');
+const connText  = document.getElementById('connText');
+
+function setConn(status, text) {
+  connBadge.className = 'badge ' + (status === 'live' ? 'live' : status === 'down' ? 'down' : '');
+  connText.textContent = text;
+}
+
+const SELECT = 'id,device_id,recorded_at,device_time,air_temp,humidity,soil_raw,soil_pct';
+
+async function sbGet(query) {
+  const res = await fetch(`${CONFIG.supabaseUrl}/rest/v1/${CONFIG.table}?${query}`, {
+    headers: { apikey: CONFIG.supabaseKey, Accept: 'application/json' }
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// Keep the row exactly as stored, and add `ts` (epoch seconds of recorded_at) for charts/sorting
+function mapRow(row) {
+  const when = Date.parse(row.recorded_at || row.device_time);
+  return { ...row, ts: isFinite(when) ? Math.floor(when / 1000) : Math.floor(Date.now() / 1000) };
+}
+
+let polling = false;
+async function poll() {
+  if (polling) return;
+  polling = true;
+  try {
+    let rows;
+    if (!state.loaded) {
+      rows = await sbGet(`select=${SELECT}&order=id.desc&limit=${CONFIG.initialRows}`);
+      rows.reverse();                       // oldest → newest
+    } else {
+      rows = await sbGet(`select=${SELECT}&id=gt.${state.lastId}&order=id.asc&limit=500`);
+    }
+    const firstLoad = !state.loaded;
+    state.loaded = true;
+    setConn('live', 'Live · Supabase');
+    if (rows.length) ingestRows(rows.map(mapRow));
+    else if (firstLoad && !state.log.length) showEmptyHint();
+  } catch (e) {
+    console.error('Supabase error:', e);
+    setConn('down', 'Supabase error — see console');
+  } finally {
+    polling = false;
+  }
+}
+
+function showEmptyHint() {
+  document.getElementById('logBody').innerHTML =
+    '<tr><td colspan="8" class="empty">No readings returned. If the table has data, make sure a ' +
+    'Row Level Security policy lets the <b>anon</b> role SELECT from it.</td></tr>';
+}
+
+/* ============================================================================
+   4. INGEST
+   ========================================================================= */
+function ingestRows(rows) {
+  const newest = {};
+  rows.forEach(r => {
+    const id = r.device_id || 'unknown';
+    if (!state.nodes[id]) state.nodes[id] = { history: [], last: null, count: 0 };
+    const node = state.nodes[id];
+    node.last = r;
+    node.count++;
+    node.history.push(r);
+    if (node.history.length > CONFIG.maxPoints) node.history.shift();
+
+    state.log.unshift(r);
+    if (state.log.length > CONFIG.maxLogRows) state.log.pop();
+
+    if (r.id != null && r.id > state.lastId) state.lastId = r.id;
+    newest[id] = r;
+  });
+
+  if (!state.activeNode) state.activeNode = Object.keys(state.nodes).sort()[0] || null;
+
+  Object.values(newest).forEach(evaluateAdvisories);   // advisories for the latest reading per device
+  renderChips();
+  renderActive();
+  renderLog();
+  renderLastBadge();
+}
+
+/* ============================================================================
+   5. ADVISORY ENGINE (rule-based, the seed of the future AI layer)
+   ========================================================================= */
+function evaluateAdvisories(r) {
+  const out = [];
+  const when = r.ts * 1000;
+  const push = (level, emoji, title, detail) =>
+    out.push({ level, emoji, title, detail, ts: when, node: r.device_id });
+
+  // --- Soil moisture (soil_pct) -------------------------------------------
+  const sm = num(r.soil_pct);
+  if (sm !== null) {
+    if (sm < TH.soil.critLow)
+      push('critical', '🚨', 'Irrigate immediately',
+        `Soil moisture at ${sm.toFixed(0)}% is below the ${TH.soil.critLow}% wilting threshold. Irrigate now — early morning or after 4 pm to cut evaporation losses.`);
+    else if (sm < TH.soil.low)
+      push('warning', '💧', 'Irrigation recommended within 24 h',
+        `Soil moisture is ${sm.toFixed(0)}% — approaching stress levels for maize at this growth stage. Prepare to irrigate.`);
+    else if (sm > TH.soil.critHigh)
+      push('critical', '🌊', 'Waterlogging risk — check drainage',
+        `Soil moisture at ${sm.toFixed(0)}% is above ${TH.soil.critHigh}%. Open drainage furrows; prolonged saturation causes root rot.`);
+    else
+      push('good', '✅', 'Soil moisture optimal',
+        `${sm.toFixed(0)}% is within the ideal 35–70% band. No irrigation needed.`);
+  }
+
+  // --- Air temperature (air_temp) -----------------------------------------
+  const at = num(r.air_temp);
+  if (at !== null) {
+    if (at >= TH.airT.critHigh)
+      push('critical', '🔥', 'Heat stress alert',
+        `Air temperature is ${at.toFixed(1)} °C. Heat stress reduces pollination in maize. Irrigate in the evening and consider mulching.`);
+    else if (at <= TH.airT.low)
+      push('warning', '🥶', 'Cold stress risk',
+        `Air temperature at ${at.toFixed(1)} °C may slow germination and early growth. Monitor young seedlings.`);
+  }
+
+  // --- Humidity + temperature → fungal disease ----------------------------
+  const hum = num(r.humidity);
+  if (hum !== null && at !== null && hum > TH.hum.high && at >= 18 && at <= 30) {
+    push('warning', '🍄', 'Fungal disease risk elevated',
+      `Humidity ${hum.toFixed(0)}% with ${at.toFixed(0)} °C creates favourable conditions for late blight and leaf rust. Scout the field within 48 h.`);
+  }
+
+  // Merge: keep the newest advisory per (device,title)
+  out.forEach(a => {
+    const i = state.advisories.findIndex(x => x.node === a.node && x.title === a.title);
+    if (i >= 0) state.advisories[i] = a; else state.advisories.unshift(a);
+  });
+  state.advisories = state.advisories.slice(0, 40);
+
+  renderAdvisories();
+}
+
+/* ============================================================================
+   6. RENDERING — device chips + header badge
+   ========================================================================= */
+function nodeStatus(node) {
+  if (!node.last) return 'offline';
+  const age = Date.now() - node.last.ts * 1000;
+  if (age > CONFIG.offlineAfterMs) return 'offline';
+  if (age > CONFIG.staleAfterMs) return 'stale';
+  return 'live';
+}
+
+function renderChips() {
+  const row = document.getElementById('chipRow');
+  const ids = Object.keys(state.nodes).sort();
+  if (!ids.length) { row.innerHTML = '<span class="chip" style="cursor:default;color:#4e6285">Waiting for devices…</span>'; return; }
+
+  row.innerHTML = ids.map(id => {
+    const st = nodeStatus(state.nodes[id]);
+    return `<div class="chip ${st} ${id === state.activeNode ? 'active' : ''}" data-node="${esc(id)}">
+      <span class="sdot"></span> ${esc(id)}
+    </div>`;
+  }).join('');
+
+  row.querySelectorAll('.chip[data-node]').forEach(el => {
+    el.onclick = () => { state.activeNode = el.dataset.node; renderChips(); renderActive(); };
+  });
+}
+
+function renderLastBadge() {
+  const all = Object.values(state.nodes).map(n => n.last).filter(Boolean);
+  if (!all.length) return;
+  const newest = all.reduce((a, b) => (b.ts > a.ts ? b : a));
+  document.getElementById('lastText').textContent = 'Last reading ' + fmtDateTime(newest.ts * 1000);
+}
+
+/* ============================================================================
+   7. RENDERING — KPI cards, gauge, latest row, chart
+   ========================================================================= */
+function setKPI(elId, barId, value, decimals, colorFn) {
+  const el = document.getElementById(elId);
+  const bar = document.getElementById(barId);
+  const unit = el.querySelector('.unit');
+  const unitTxt = unit ? unit.outerHTML : '';
+  if (value === null) {
+    el.innerHTML = '--' + unitTxt;
+    bar.style.width = '0%';
+    return;
+  }
+  el.innerHTML = value.toFixed(decimals) + unitTxt;
+  const c = colorFn ? colorFn(value) : null;
+  if (c) el.className = 'value ' + c;
+}
+
+function renderActive() {
+  const id = state.activeNode;
+  const node = state.nodes[id];
+  document.getElementById('chartNode').textContent = id || 'no device';
+  document.getElementById('latestDevice').textContent = id || 'readings';
+  if (!node || !node.last) return;
+
+  const r = node.last;
+
+  // ---- Soil moisture gauge (soil_pct) ----
+  const sm = num(r.soil_pct);
+  const C = 2 * Math.PI * 78; // 490
+  const arc = document.getElementById('gaugeArc');
+  if (sm !== null) {
+    const pct = Math.max(0, Math.min(100, sm));
+    arc.setAttribute('stroke-dashoffset', C - (C * pct / 100));
+    arc.setAttribute('stroke', sm < TH.soil.critLow ? '#f0616a'
+                          : sm < TH.soil.low      ? '#f6b73c'
+                          : sm > TH.soil.critHigh ? '#4aa8ff'
+                          : '#35d69f');
+    document.getElementById('gaugeVal').textContent = sm.toFixed(0);
+    document.getElementById('gaugeVal').style.color = arc.getAttribute('stroke');
+  }
+
+  // ---- KPI cards ----
+  setKPI('kSoil', 'bSoil', sm, 0,
+    v => v < TH.soil.critLow ? 'bad' : v < TH.soil.low ? 'warn' : v > TH.soil.critHigh ? 'info' : 'ok');
+  document.getElementById('bSoil').style.width = (sm === null ? 0 : Math.min(100, sm)) + '%';
+
+  const raw = num(r.soil_raw);
+  setKPI('kRaw', 'bRaw', raw, 0, () => 'info');
+  document.getElementById('bRaw').style.width =
+    (raw === null ? 0 : Math.max(0, Math.min(100, (raw / CONFIG.rawMax) * 100))) + '%';
+
+  const at = num(r.air_temp);
+  setKPI('kAirT', 'bAirT', at, 1, v => v >= TH.airT.critHigh ? 'bad' : v >= TH.airT.high ? 'warn' : 'ok');
+  document.getElementById('bAirT').style.width = (at === null ? 0 : Math.min(100, (at / 50) * 100)) + '%';
+
+  const hm = num(r.humidity);
+  setKPI('kHum', 'bHum', hm, 1, v => v > TH.hum.high ? 'warn' : v < TH.hum.low ? 'warn' : 'ok');
+  document.getElementById('bHum').style.width = (hm === null ? 0 : Math.min(100, hm)) + '%';
+
+  // ---- Latest row, laid out like the table ----
+  const dt = r.device_time ? Date.parse(r.device_time) : NaN;
+  const fields = [
+    ['id',          r.id,                                  false],
+    ['device_id',   r.device_id,                           false],
+    ['recorded_at', fmtDateTime(r.ts * 1000),              false],
+    ['device_time', isFinite(dt) ? fmtDateTime(dt) : null, false],
+    ['air_temp',    num(r.air_temp)  === null ? null : fix(r.air_temp, 1),  false],
+    ['humidity',    num(r.humidity)  === null ? null : fix(r.humidity, 1),  false],
+    ['soil_raw',    num(r.soil_raw)  === null ? null : fix(r.soil_raw, 0),  false],
+    ['soil_pct',    num(r.soil_pct)  === null ? null : fix(r.soil_pct, 0),  false]
+  ];
+  document.getElementById('latestRow').innerHTML = fields.map(([k, v]) =>
+    `<dt>${k}</dt><dd class="${v === null || v === undefined ? 'null' : ''}">${v === null || v === undefined ? 'null' : esc(v)}</dd>`
+  ).join('');
+
+  // ---- Chart ----
+  const h = node.history;
+  trendChart.data.labels = h.map(x => fmtTime(x.ts * 1000, false));
+  trendChart.data.datasets[0].data = h.map(x => num(x.soil_pct));
+  trendChart.data.datasets[1].data = h.map(x => num(x.air_temp));
+  trendChart.data.datasets[2].data = h.map(x => num(x.humidity));
+  trendChart.update('none');
+}
+
+/* ---------- Chart.js setup ---------- */
+Chart.defaults.color = '#8ba0c0';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size = 11;
+
+const trendChart = new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'Soil Moisture (%)', data: [], borderColor: '#4aa8ff', backgroundColor: 'rgba(74,168,255,.12)',
+        borderWidth: 2, tension: .35, pointRadius: 0, fill: true, yAxisID: 'y' },
+      { label: 'Air Temp (°C)', data: [], borderColor: '#f0616a', backgroundColor: 'transparent',
+        borderWidth: 2, tension: .35, pointRadius: 0, yAxisID: 'y1' },
+      { label: 'Humidity (%)', data: [], borderColor: '#a78bfa', backgroundColor: 'transparent',
+        borderWidth: 2, tension: .35, pointRadius: 0, borderDash: [5, 4], yAxisID: 'y' }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { usePointStyle: true, boxWidth: 7, padding: 14 } },
+      tooltip: { backgroundColor: '#0d1728', borderColor: '#22314e', borderWidth: 1, padding: 10 }
+    },
+    scales: {
+      x: { grid: { color: 'rgba(34,49,78,.5)' }, ticks: { maxTicksLimit: 8 } },
+      y: { position: 'left', min: 0, max: 100, title: { display: true, text: '%' },
+           grid: { color: 'rgba(34,49,78,.5)' } },
+      y1: { position: 'right', min: 0, max: 50, title: { display: true, text: '°C' },
+            grid: { drawOnChartArea: false } }
+    }
+  }
+});
+
+/* ============================================================================
+   8. RENDERING — advisories + readings log
+   ========================================================================= */
+function renderAdvisories() {
+  const el = document.getElementById('advList');
+  if (!state.advisories.length) return;
+  el.innerHTML = state.advisories.map(a => `
+    <div class="adv ${a.level}">
+      <div class="em">${a.emoji}</div>
+      <div>
+        <strong>${a.title}</strong>
+        <span>${a.detail}</span>
+        <span class="ts">${esc(a.node)} · ${fmtDateTime(a.ts)}</span>
+      </div>
+    </div>`).join('');
+}
+
+function renderLog() {
+  const body = document.getElementById('logBody');
+  if (!state.log.length) return;
+  body.innerHTML = state.log.slice(0, 120).map(r => {
+    const sm = num(r.soil_pct);
+    const smCls = sm === null ? '' : sm < TH.soil.critLow ? 'bad' : sm < TH.soil.low ? 'warn' : 'ok';
+    const dt = r.device_time ? Date.parse(r.device_time) : NaN;
+    return `<tr>
+      <td class="mono">${r.id ?? '--'}</td>
+      <td style="color:#8ba0c0">${esc(r.device_id ?? '--')}</td>
+      <td>${fmtDateTime(r.ts * 1000)}</td>
+      <td>${isFinite(dt) ? fmtDateTime(dt) : '<span class="nul">null</span>'}</td>
+      <td>${fix(r.air_temp, 1)}</td>
+      <td>${fix(r.humidity, 1)}</td>
+      <td>${fix(r.soil_raw, 0)}</td>
+      <td class="${smCls}">${fix(r.soil_pct, 0)}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* Refresh device status colours every 30 s */
+setInterval(renderChips, 30000);
+
+/* ============================================================================
+   9. CSV EXPORT  (same columns as the readings table; times in Nairobi time)
+   ========================================================================= */
+document.getElementById('csvBtn').onclick = () => {
+  if (!state.log.length) return alert('No data to export yet.');
+  const cols = ['id', 'device_id', 'recorded_at', 'device_time', 'air_temp', 'humidity', 'soil_raw', 'soil_pct'];
+  const header = cols.join(',');
+  const lines = state.log.map(r => cols.map(c => {
+    if (c === 'recorded_at') return fmtISOLocal(r.ts * 1000);
+    if (c === 'device_time') return r.device_time ? fmtISOLocal(Date.parse(r.device_time)) : '';
+    const v = r[c];
+    return v === undefined || v === null ? '' : v;
+  }).join(','));
+  const blob = new Blob([header + '\n' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `busia_agrisense_readings_${fmtDateLocal(Date.now())}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+/* ============================================================================
+   START — load history, then keep polling for new rows
+   ========================================================================= */
+poll();
+setInterval(poll, CONFIG.pollMs);
+</script>
+</body>
+</html>
