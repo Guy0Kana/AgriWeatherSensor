@@ -23,8 +23,8 @@ const char* WIFI_SSID = "Wokwi-GUEST";
 const char* WIFI_PASS = "";
 #define DEVICE_ID "wokwi-sim"
 #else
-const char* WIFI_SSID = "YOUR_2.4GHZ_WIFI";    // <-- change
-const char* WIFI_PASS = "YOUR_PASSWORD";       // <-- change
+const char* WIFI_SSID = "";    // <-- change
+const char* WIFI_PASS = "";       // <-- change
 #define DEVICE_ID "farm1"
 #endif
 
@@ -32,7 +32,7 @@ const char* WIFI_PASS = "YOUR_PASSWORD";       // <-- change
 const char* SUPA_URL = "https://wubufrivwsmjgqjnavew.supabase.co/rest/v1/readings";
 const char* SUPA_KEY = "sb_publishable_DUf8fAVckXvGMFwl7d5VeA_7pFBVNNn";
 
-const unsigned long SEND_MS = 60000;   // 60 s; use 15000 for demos
+const unsigned long SEND_MS = 15000; 
 
 DHT dht(DHT_PIN, DHT22);
 unsigned long lastSend = 0;
