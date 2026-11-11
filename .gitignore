@@ -1,0 +1,21 @@
+**/secrets.h
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Generated build and dependency output
+node_modules/
+dist/
+build/
+.pio/
+supabase/.temp/
+*.o
+*.elf
+*.hex
+*.bin
+
+# Operating system files
+.DS_Store
+Thumbs.db
