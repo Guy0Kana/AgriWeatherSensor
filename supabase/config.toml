@@ -1,0 +1,4 @@
+project_id = "wubufrivwsmjgqjnavew"
+
+[functions.decrypt-readings]
+verify_jwt = true
